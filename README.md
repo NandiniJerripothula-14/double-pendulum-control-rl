@@ -1,49 +1,89 @@
 # Double Pendulum Control with Reinforcement Learning
 
-This project implements a custom 2D double inverted pendulum control task using pymunk and pygame, and trains a PPO agent with Stable Baselines3.
+This project builds a custom 2D double inverted pendulum environment with pymunk + pygame and trains a PPO agent (Stable-Baselines3) to balance both poles.
+
+## Project Overview
+
+- Environment class: `DoublePendulumEnv` in `src/environment.py`
+- Training entrypoint: `src/train.py`
+- Evaluation entrypoint: `src/evaluate.py`
+- Plotting utility: `plot_rewards.py`
 
 ### Environment Design
 
-The environment class is implemented in src/environment.py as DoublePendulumEnv.
+The environment models a cart moving horizontally with two linked poles.
 
-System components:
-- Cart body constrained to horizontal movement with a GrooveJoint.
-- Pole 1 attached to the cart with a PivotJoint.
-- Pole 2 attached to pole 1 with a PivotJoint.
-- Physics integrated via pymunk.Space.step(dt) at 60 Hz.
+Core physics components:
+
+- Cart constrained by a `GrooveJoint`
+- Pole 1 attached to cart via `PivotJoint`
+- Pole 2 attached to pole 1 via `PivotJoint`
+- Fixed-step simulation using `pymunk.Space.step(dt)` at 60 Hz (`dt = 1/60`)
 
 State and action spaces:
-- Observation space: Box(shape=(6,))
-- Observation vector: [cart_x, cart_vx, theta1, omega1, theta2, omega2]
-- Action space: Box(shape=(1,), low=-1.0, high=1.0)
-- Action is scaled to cart force in step().
+
+- Observation space: `Box(shape=(6,))`
+- Observation vector: `[cart_x, cart_vx, theta1, omega1, theta2, omega2]`
+- Action space: `Box(shape=(1,), low=-1.0, high=1.0)`
+- Action is scaled to force in the environment step
 
 Episode termination:
-- Cart leaves track bounds.
-- Either pole angle exceeds limit.
-- Maximum episode step count is reached.
+
+- Cart exceeds track bounds
+- Either pole exceeds angle threshold
+- Maximum episode length reached
 
 ### Reward Function Design
 
-Two reward modes are supported through reward_type.
+Two reward modes are implemented via `reward_type`: `baseline` and `shaped`.
 
 Baseline reward:
-- Formula: R_baseline = cos(theta1) + cos(theta2)
-- Rationale: Directly rewards upright pole angles.
+
+- `R_baseline = cos(theta1) + cos(theta2)`
+- Purpose: reward upright poles directly
 
 Shaped reward:
-- Formula:
-  R_shaped = cos(theta1) + cos(theta2)
-             - 0.1 * |cart_x|
-             - 0.01 * (|omega1| + |omega2|)
-             - 0.001 * action^2
-             - 0.01 * |cart_vx|
-- Rationale:
-  - Keeps poles upright (core objective).
-  - Penalizes leaving center to avoid running off track.
-  - Penalizes high angular velocity for smoother stabilization.
-  - Penalizes large forces for control efficiency.
-  - Penalizes high cart velocity for reduced oscillations.
+
+- `R_shaped = cos(theta1) + cos(theta2)`
+- `- 0.1 * |cart_x|`
+- `- 0.01 * (|omega1| + |omega2|)`
+- `- 0.001 * action^2`
+- `- 0.01 * |cart_vx|`
+
+Behavior encouraged/discouraged by each term:
+
+- Upright term: encourages balancing both poles vertically
+- Center penalty: discourages drifting toward track edges
+- Angular velocity penalty: discourages violent swinging
+- Action penalty: discourages excessive force usage
+- Cart velocity penalty: discourages unnecessary rushing/oscillation
+
+### PPO Hyperparameter Tuning
+
+Method used:
+
+- Manual tuning with short runs first, then longer runs for confirmation
+
+Most impactful hyperparameters:
+
+- `learning_rate`: strongest impact on training stability
+- `n_steps`: impacted rollout quality and update consistency
+- `batch_size`: improved smoothness of gradient updates
+
+### Physics Design Challenges
+
+Main issues encountered:
+
+- Simulation stability
+- Joint anchor correctness
+- Sensitivity to mass/inertia and timestep choices
+
+How they were handled:
+
+- Fixed timestep at `1/60`
+- Reasonable mass/inertia values
+- Corrected joint anchor placement
+- Added damping to reduce jitter/instability
 
 ### How to Run
 
@@ -53,45 +93,63 @@ Shaped reward:
 docker-compose build
 ```
 
-2. Train with shaped reward
+1. Train with shaped reward
 
 ```bash
 docker-compose run --rm train
 ```
 
-3. Train with baseline reward
+1. Train with baseline reward
 
 ```bash
 docker-compose run --rm train-baseline
 ```
 
-4. Custom training run
+1. Custom training run
 
 ```bash
 docker-compose run --rm train python src/train.py --timesteps 1000 --reward_type shaped --save_path models/test.zip
 ```
 
-5. Evaluate a trained model
+1. Evaluate a trained model
 
 ```bash
 docker-compose run --rm evaluate python src/evaluate.py --model_path models/test.zip --episodes 1
 ```
 
-6. Generate reward curve comparison plot
+1. Generate reward comparison plot
 
 ```bash
 docker-compose run --rm plot
 ```
 
-## Outputs
+## Robustness Evaluation Plan
 
-- Trained models: models/
-- Training logs (CSV): logs/
-- Reward curve figure: reward_comparison.png
-- GIFs: media/agent_initial.gif and media/agent_final.gif
+Proposed disturbance test:
+
+- Apply random force disturbances during evaluation
+- Run multiple disturbance levels and random seeds
+
+Metrics:
+
+- Success rate
+- Average episode length
+- Average reward
+- Recovery time after disturbance
+
+## Repository Outputs
+
+- `reward_comparison.png`
+- `media/agent_initial.gif`
+- `media/agent_final.gif`
+
+Generated artifacts (not committed):
+
+- `logs/`
+- `models/`
 
 ## Notes
 
-- The train script logs mean reward over timesteps to CSV (training_metrics.csv).
-- The evaluation script can render with pygame and optionally save GIFs.
-- .env.example documents configurable environment variables.
+- Training logs include `timesteps` and `mean_reward`
+- Evaluation supports rendering and optional GIF generation
+- `.env.example` documents environment variables
