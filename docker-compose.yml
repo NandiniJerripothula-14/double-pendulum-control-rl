@@ -1,0 +1,52 @@
+services:
+  app:
+    build: .
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+    stdin_open: true
+    tty: true
+
+  train:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python src/train.py --timesteps 200000 --reward_type shaped --save_path models/ppo_shaped.zip
+    stdin_open: true
+    tty: true
+
+  train-baseline:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python src/train.py --timesteps 200000 --reward_type baseline --save_path models/ppo_baseline.zip
+    stdin_open: true
+    tty: true
+
+  evaluate:
+    build: .
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - PYTHONUNBUFFERED=1
+    command: python src/evaluate.py --model_path models/ppo_shaped.zip
+    stdin_open: true
+    tty: true
+
+  plot:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python plot_rewards.py
+    stdin_open: true
+    tty: true
