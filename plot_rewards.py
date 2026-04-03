@@ -40,7 +40,11 @@ def load_metrics(log_dir):
             reader = csv.DictReader(f)
             for row in reader:
                 try:
-                    timesteps.append(int(row['timestep']))
+                    # Support both "timesteps" and legacy "timestep" headers.
+                    ts_value = row.get('timesteps', row.get('timestep'))
+                    if ts_value is None:
+                        raise KeyError('timesteps')
+                    timesteps.append(int(ts_value))
                     rewards.append(float(row['mean_reward']))
                 except (ValueError, KeyError) as e:
                     print(f"Warning: Could not parse row {row}: {e}")
